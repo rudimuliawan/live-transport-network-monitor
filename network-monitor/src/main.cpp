@@ -1,13 +1,22 @@
+#include <boost/asio.hpp>
+#include <boost/system/error_code.hpp>
+
 #include <iostream>
-#include <string>
-#include <utility>
 
-int main() {
-    std::cout << "Hello, World!" << std::endl;
-    std::pair<std::string, double> pair {"Hello, World", 42};
+using tcp = boost::asio::ip::tcp;
 
-    const auto& [str, num] = pair;
-    std::cout << str << ": " << num << std::endl;
+int main()
+{
+    boost::asio::io_context ioc {};
 
-    return 0;
+    tcp::socket socket {ioc};
+
+    boost::system::error_code ec {};
+    if (ec) {
+        std::cerr << "Error: " << ec.message() << std::endl;
+        return -1;
+    } else {
+        std::cout << "OK" << std::endl;
+        return 0;
+    }
 }
