@@ -1,60 +1,74 @@
+#include <network-monitor/websocket-client.h>
+
 #include <boost/asio.hpp>
-#include <boost/system/error_code.hpp>
 
-#include <iomanip>
 #include <iostream>
-#include <thread>
+#include <string>
 
-using tcp = boost::asio::ip::tcp;
-
-void Log(boost::system::error_code ec)
-{
-    std::cerr << "[" << std::setw(14) << std::this_thread::get_id() << "] "
-              << (ec ? "Error: " : "OK")
-              << (ec ? ec.message() : "")
-              << std::endl;
-}
-
-void OnConnect(boost::system::error_code ec)
-{
-    Log(ec);
-}
+using NetworkMonitor::WebSocketClient;
 
 int main()
 {
-    std::cerr << "[" << std::setw(14) << std::this_thread::get_id() << "] main"
-              << std::endl;
+    // Connection targets
+    const std::string url {"ltnm.learncppthroughprojects.com"};
+    const std::string endpoint {"/echo"};
+    const std::string port {"80"};
+    const std::string message {"Hello WebSocket"};
 
+    // Always start with an I/O context object.
     boost::asio::io_context ioc {};
 
-    tcp::socket socket {ioc};
+    // The class under test
+    WebSocketClient client {url, endpoint, port, ioc};
 
-    size_t nThreads {4};
+    // We use these flags to check that the connection, send, receive functions
+    // work as expected.
+    bool connected {false};
+    bool messageSent {false};
+    bool messageReceived {false};
+    bool messageMatches {false};
+    bool disconnected {false};
 
-    boost::system::error_code ec {};
-    tcp::resolver resolver {ioc};
-    auto resolverIt {resolver.resolve("google.com", "80", ec)};
-    if (ec) {
-        Log(ec);
-        return -1;
+    // Our own callbacks
+    auto onSend {[&messageSent](auto ec) {
+        messageSent = !ec;
+    }};
+    auto onConnect {[&client, &connected, &onSend, &message](auto ec) {
+        connected = !ec;
+        if (!ec) {
+            client.Send(message, onSend);
+        }
+    }};
+    auto onClose {[&disconnected](auto ec) {
+        disconnected = !ec;
+    }};
+    auto onReceive {[&client,
+                            &onClose,
+                            &messageReceived,
+                            &messageMatches,
+                            &message](auto ec, auto received) {
+        messageReceived = !ec;
+        messageMatches = message == received;
+        client.Close(onClose);
+    }};
+
+    // We must call io_context::run for asynchronous callbacks to run.
+    client.Connect(onConnect, onReceive);
+    ioc.run();
+
+    // When we get here, the io_context::run function has run out of work to do.
+    bool ok {
+        connected &&
+        messageSent &&
+        messageReceived &&
+        messageMatches &&
+        disconnected
+    };
+    if (ok) {
+        std::cout << "OK" << std::endl;
+        return 0;
+    } else {
+        std::cerr << "Test failed" << std::endl;
+        return 1;
     }
-
-    for (size_t idx {0}; idx < nThreads; ++idx) {
-        socket.async_connect(*resolverIt, OnConnect);
-    }
-
-    std::vector<std::thread> threads {};
-    threads.reserve(nThreads);
-
-    for (size_t idx {0}; idx < nThreads; ++idx) {
-        threads.emplace_back([&ioc]() {
-           ioc.run();
-        });
-    }
-
-    for (size_t idx {0}; idx < nThreads; ++idx) {
-        threads[idx].join();
-    }
-
-    return 0;
 }
