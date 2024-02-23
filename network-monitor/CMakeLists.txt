@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.27)
 
 project(network-monitor)
 
-find_package(Boost 1.74 REQUIRED COMPONENTS system)
+find_package(Boost 1.84.0 REQUIRED COMPONENTS system)
 
 # Static library
 set(LIB_SOURCES
